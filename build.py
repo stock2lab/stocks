@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 ROOT = pathlib.Path(__file__).parent
 SITE = "https://stocks.bjxihi.com"
 # Google Analytics 4 Measurement ID — 用户在 analytics.google.com 建好媒体资源后替换
-GA_ID = "G-XXXXXXXXXX"
+GA_ID = "G-4Y532TX5S0"
 
 COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股"}
 COL_ICONS = {"premarket": "☀", "postmarket": "🌙"}
