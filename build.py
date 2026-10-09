@@ -2,9 +2,10 @@
 """Generate the stocks site: index.html, per-post pages, sitemap.xml, feed.xml.
 
 Source of truth: data/posts.json
-  {"premarket": [...], "postmarket": [...], "review": [...]}
+  {"premarket": [...], "postmarket": [...], "review": [...], "stock": [...]}
   each entry: {"date": "YYYY-MM-DD", "title": "...", "body": ["...", ...]}
   "review" holds 每周复盘 (Saturdays) and 月度复盘 (1st of month) posts.
+  "stock" holds 每周一股 (Sundays) single-stock profiles.
 """
 import html
 import json
@@ -16,8 +17,8 @@ SITE = "https://stocks.bjxihi.com"
 # Google Analytics 4 Measurement ID — 用户在 analytics.google.com 建好媒体资源后替换
 GA_ID = "G-4Y532TX5S0"
 
-COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "复盘"}
-COL_ICONS = {"premarket": "☀", "postmarket": "🌙", "review": "📊"}
+COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "复盘", "stock": "每周一股"}
+COL_ICONS = {"premarket": "☀", "postmarket": "🌙", "review": "📊", "stock": "🎯"}
 
 BEIJING = timezone(timedelta(hours=8))
 
@@ -50,7 +51,7 @@ def publish_times(col, p):
         bj = datetime.strptime(explicit, "%Y-%m-%d %H:%M").replace(tzinfo=BEIJING)
     else:
         h, m = {"postmarket": (8, 21), "premarket": (20, 21),
-                "review": (8, 30)}[col]
+                "review": (8, 30), "stock": (8, 30)}[col]
         bj = datetime.strptime(p["date"], "%Y-%m-%d").replace(
             tzinfo=BEIJING, hour=h, minute=m)
     et = bj.astimezone(timezone(eastern_offset(bj)))
@@ -134,7 +135,7 @@ def desc_of(p):
 post_dir = ROOT / "posts"
 post_dir.mkdir(exist_ok=True)
 all_posts = []
-for col in ("premarket", "postmarket", "review"):
+for col in ("premarket", "postmarket", "review", "stock"):
     for p in posts.get(col, []):
         s = slug(col, p)
         url = f"{SITE}/posts/{s}"
@@ -178,6 +179,7 @@ index_body = f"""<main class="cols">
 {column('premarket', posts.get('premarket', []))}
 {column('postmarket', posts.get('postmarket', []))}
 {column('review', posts.get('review', []))}
+{column('stock', posts.get('stock', []))}
 </main>"""
 (ROOT / "index.html").write_text(
     shell(
