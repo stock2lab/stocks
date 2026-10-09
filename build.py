@@ -17,7 +17,7 @@ SITE = "https://stocks.bjxihi.com"
 # Google Analytics 4 Measurement ID — 用户在 analytics.google.com 建好媒体资源后替换
 GA_ID = "G-4Y532TX5S0"
 
-COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "复盘", "stock": "每周一股"}
+COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "周月复盘", "stock": "每周一股"}
 COL_ICONS = {"premarket": "☀", "postmarket": "🌙", "review": "📊", "stock": "🎯"}
 
 BEIJING = timezone(timedelta(hours=8))
