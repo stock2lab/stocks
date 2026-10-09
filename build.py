@@ -75,7 +75,7 @@ def ga_snippet():
     )
 
 
-def head(title, desc, url):
+def head(title, desc, url, extra=""):
     return f"""<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
@@ -88,12 +88,33 @@ def head(title, desc, url):
 <meta property="og:site_name" content="美股早晚盘">
 <link rel="stylesheet" href="/styles.css">
 <link rel="alternate" type="application/rss+xml" title="美股早晚盘 RSS" href="/feed.xml">
-{ga_snippet()}"""
+{extra}{ga_snippet()}"""
 
 
-def header():
-    return """<header class="site">
-<h1><a href="/" style="color:inherit;text-decoration:none">美股<span>早晚盘</span></a></h1>
+def json_ld_article(col, p, url):
+    _, _, bj_dt = publish_times(col, p)
+    data = {
+        "@context": "https://schema.org",
+        "@type": "NewsArticle",
+        "headline": p["title"],
+        "description": desc_of(p),
+        "datePublished": bj_dt.isoformat(),
+        "inLanguage": "zh-CN",
+        "author": {"@type": "Organization", "name": "美股早晚盘"},
+        "publisher": {"@type": "Organization", "name": "美股早晚盘"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": url},
+    }
+    return ('<script type="application/ld+json">\n'
+            + json.dumps(data, ensure_ascii=False) + '\n</script>\n')
+
+
+def header(h1=True):
+    brand = ("<h1><a href=\"/\" style=\"color:inherit;text-decoration:none\">"
+             "美股<span>早晚盘</span></a></h1>" if h1 else
+             "<div class=\"brand\"><a href=\"/\" style=\"color:inherit;text-decoration:none\">"
+             "美股<span>早晚盘</span></a></div>")
+    return f"""<header class="site">
+{brand}
 <p>盘前新闻 · 盘后个股 —— 每天两条，浓缩加一点解读 · <a href="/feed.xml">RSS 订阅</a></p>
 </header>"""
 
@@ -105,15 +126,15 @@ def footer():
 </footer>"""
 
 
-def shell(title, desc, url, body_html):
+def shell(title, desc, url, body_html, extra_head="", site_h1=True):
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-{head(title, desc, url)}
+{head(title, desc, url, extra_head)}
 </head>
 <body>
 <div class="wrap">
-{header()}
+{header(h1=site_h1)}
 {body_html}
 {footer()}
 </div>
@@ -145,12 +166,13 @@ for col in ("premarket", "postmarket", "review", "stock"):
 <article class="card">
 <div class="date">{html.escape(p['date'])} · {COL_NAMES[col]}</div>
 {pubtime_html(col, p)}
-<h3 style="font-size:20px">{html.escape(p['title'])}</h3>
+<h1 class="post-title">{html.escape(p['title'])}</h1>
 <ul style="margin-top:12px">{lis}</ul>
 </article>
 </main>"""
         (post_dir / s).write_text(
-            shell(f"{p['title']} · 美股早晚盘", desc_of(p), url, body_html),
+            shell(f"{p['title']} · 美股早晚盘", desc_of(p), url, body_html,
+                  extra_head=json_ld_article(col, p, url), site_h1=False),
             encoding="utf-8",
         )
         all_posts.append((col, p, s, url))
