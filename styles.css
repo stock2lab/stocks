@@ -56,6 +56,12 @@ header.site p { color: var(--muted); font-size: 14px; margin-top: 6px; letter-sp
   margin-bottom: 10px;
   letter-spacing: 1px;
 }
+.card .pubtime {
+  font-size: 12px;
+  color: var(--muted);
+  margin: -4px 0 10px;
+  letter-spacing: .5px;
+}
 .card h3 { font-size: 17px; margin-bottom: 10px; line-height: 1.5; }
 .card ul { padding-left: 20px; font-size: 14.5px; color: #333; }
 .card li { margin-bottom: 8px; }

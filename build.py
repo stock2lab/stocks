@@ -17,6 +17,48 @@ GA_ID = "G-4Y532TX5S0"
 COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股"}
 COL_ICONS = {"premarket": "☀", "postmarket": "🌙"}
 
+BEIJING = timezone(timedelta(hours=8))
+
+
+def eastern_offset(dt_beijing):
+    """US Eastern UTC offset at the given Beijing datetime (EDT/EST)."""
+    y = dt_beijing.year
+
+    def nth_sunday(year, month, n):
+        d = datetime(year, month, 1)
+        days = (6 - d.weekday()) % 7
+        return (d + timedelta(days=days + 7 * (n - 1))).date()
+
+    dst_start = nth_sunday(y, 3, 2)   # 2nd Sunday of March
+    dst_end = nth_sunday(y, 11, 1)    # 1st Sunday of November
+    if dst_start <= dt_beijing.date() < dst_end:
+        return timedelta(hours=-4)    # EDT
+    return timedelta(hours=-5)        # EST
+
+
+def publish_times(col, p):
+    """Return (beijing_str, eastern_str, beijing_dt) for a post.
+
+    Convention: 晚盘 posts go out ~08:21 Beijing, 早盘 ~20:21 Beijing
+    (the two crons run at 08:21 / 20:21). A post may override with an
+    explicit "published_beijing": "YYYY-MM-DD HH:MM" field.
+    """
+    explicit = p.get("published_beijing")
+    if explicit:
+        bj = datetime.strptime(explicit, "%Y-%m-%d %H:%M").replace(tzinfo=BEIJING)
+    else:
+        h, m = (8, 21) if col == "postmarket" else (20, 21)
+        bj = datetime.strptime(p["date"], "%Y-%m-%d").replace(
+            tzinfo=BEIJING, hour=h, minute=m)
+    et = bj.astimezone(timezone(eastern_offset(bj)))
+    return bj.strftime("%Y-%m-%d %H:%M"), et.strftime("%Y-%m-%d %H:%M"), bj
+
+
+def pubtime_html(col, p):
+    bj_s, et_s, _ = publish_times(col, p)
+    return (f'<div class="pubtime">发布时间 {html.escape(bj_s)}（北京时间）'
+            f' · {html.escape(et_s)}（美东时间）</div>')
+
 posts = json.loads((ROOT / "data" / "posts.json").read_text(encoding="utf-8"))
 CSS = (ROOT / "styles.css").read_text(encoding="utf-8")
 
@@ -42,19 +84,21 @@ def head(title, desc, url):
 <meta property="og:url" content="{url}">
 <meta property="og:site_name" content="美股早晚盘">
 <link rel="stylesheet" href="/styles.css">
+<link rel="alternate" type="application/rss+xml" title="美股早晚盘 RSS" href="/feed.xml">
 {ga_snippet()}"""
 
 
 def header():
     return """<header class="site">
 <h1><a href="/" style="color:inherit;text-decoration:none">美股<span>早晚盘</span></a></h1>
-<p>盘前新闻 · 盘后个股 —— 每天两条，浓缩加一点解读</p>
+<p>盘前新闻 · 盘后个股 —— 每天两条，浓缩加一点解读 · <a href="/feed.xml">RSS 订阅</a></p>
 </header>"""
 
 
 def footer():
     return """<footer class="site">
 <p>内容仅供参考，不构成投资建议。数据来自公开市场信息，正式决策请以券商行情为准。</p>
+<p style="margin-top:8px"><a href="/feed.xml">RSS 订阅</a> · <a href="/sitemap.xml">网站地图</a></p>
 </footer>"""
 
 
@@ -97,6 +141,7 @@ for col in ("premarket", "postmarket"):
 <nav style="margin-bottom:16px;font-size:14px"><a href="/">← 返回首页</a> · {COL_ICONS[col]} {COL_NAMES[col]}</nav>
 <article class="card">
 <div class="date">{html.escape(p['date'])} · {COL_NAMES[col]}</div>
+{pubtime_html(col, p)}
 <h3 style="font-size:20px">{html.escape(p['title'])}</h3>
 <ul style="margin-top:12px">{lis}</ul>
 </article>
@@ -113,6 +158,7 @@ def card(col, p):
     lis = "\n".join(f"<li>{html.escape(x)}</li>" for x in p["body"])
     return f"""<article class="card">
 <div class="date">{html.escape(p['date'])}</div>
+{pubtime_html(col, p)}
 <h3><a href="/posts/{s}" style="color:inherit;text-decoration:none">{html.escape(p['title'])}</a></h3>
 <ul>{lis}</ul>
 </article>"""
@@ -154,11 +200,10 @@ sm.append("</urlset>")
 (ROOT / "sitemap.xml").write_text("\n".join(sm), encoding="utf-8")
 
 # ---- feed.xml (RSS 2.0) ----
-tz = timezone(timedelta(hours=8))
 items = []
 for col, p, _, url in sorted(all_posts, key=lambda t: t[1]["date"], reverse=True)[:20]:
-    pub = datetime.strptime(p["date"], "%Y-%m-%d").replace(tzinfo=tz, hour=12)
-    pub_str = pub.strftime("%a, %d %b %Y %H:%M:%S %z")
+    _, _, bj_dt = publish_times(col, p)
+    pub_str = bj_dt.strftime("%a, %d %b %Y %H:%M:%S %z")
     lis = "".join(f"<li>{html.escape(x)}</li>" for x in p["body"])
     items.append(
         f"    <item><title>{html.escape(p['title'])}（{COL_NAMES[col]}）</title>"
