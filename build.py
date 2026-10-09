@@ -55,9 +55,8 @@ def publish_times(col, p):
 
 
 def pubtime_html(col, p):
-    bj_s, et_s, _ = publish_times(col, p)
-    return (f'<div class="pubtime">发布时间 {html.escape(bj_s)}（北京时间）'
-            f' · {html.escape(et_s)}（美东时间）</div>')
+    _, et_s, _ = publish_times(col, p)
+    return (f'<div class="pubtime">发布时间 {html.escape(et_s)}（美东时间）</div>')
 
 posts = json.loads((ROOT / "data" / "posts.json").read_text(encoding="utf-8"))
 CSS = (ROOT / "styles.css").read_text(encoding="utf-8")
