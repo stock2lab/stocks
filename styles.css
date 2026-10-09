@@ -25,9 +25,10 @@ header.site h1 span { color: var(--accent); }
 header.site p { color: var(--muted); font-size: 14px; margin-top: 6px; letter-spacing: 1px;}
 .cols {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 28px;
 }
+@media (max-width: 1100px) { .cols { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
 .col > h2 {
   font-size: 19px;

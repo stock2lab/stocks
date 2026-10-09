@@ -2,7 +2,9 @@
 """Generate the stocks site: index.html, per-post pages, sitemap.xml, feed.xml.
 
 Source of truth: data/posts.json
-  {"premarket": [{"date": "YYYY-MM-DD", "title": "...", "body": ["...", ...]}], "postmarket": [...]}
+  {"premarket": [...], "postmarket": [...], "review": [...]}
+  each entry: {"date": "YYYY-MM-DD", "title": "...", "body": ["...", ...]}
+  "review" holds 每周复盘 (Saturdays) and 月度复盘 (1st of month) posts.
 """
 import html
 import json
@@ -14,8 +16,8 @@ SITE = "https://stocks.bjxihi.com"
 # Google Analytics 4 Measurement ID — 用户在 analytics.google.com 建好媒体资源后替换
 GA_ID = "G-4Y532TX5S0"
 
-COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股"}
-COL_ICONS = {"premarket": "☀", "postmarket": "🌙"}
+COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "复盘"}
+COL_ICONS = {"premarket": "☀", "postmarket": "🌙", "review": "📊"}
 
 BEIJING = timezone(timedelta(hours=8))
 
@@ -39,15 +41,16 @@ def eastern_offset(dt_beijing):
 def publish_times(col, p):
     """Return (beijing_str, eastern_str, beijing_dt) for a post.
 
-    Convention: 晚盘 posts go out ~08:21 Beijing, 早盘 ~20:21 Beijing
-    (the two crons run at 08:21 / 20:21). A post may override with an
+    Convention: 晚盘 posts go out ~08:21 Beijing, 早盘 ~20:21 Beijing,
+    复盘 posts ~08:30 Beijing. A post may override with an
     explicit "published_beijing": "YYYY-MM-DD HH:MM" field.
     """
     explicit = p.get("published_beijing")
     if explicit:
         bj = datetime.strptime(explicit, "%Y-%m-%d %H:%M").replace(tzinfo=BEIJING)
     else:
-        h, m = (8, 21) if col == "postmarket" else (20, 21)
+        h, m = {"postmarket": (8, 21), "premarket": (20, 21),
+                "review": (8, 30)}[col]
         bj = datetime.strptime(p["date"], "%Y-%m-%d").replace(
             tzinfo=BEIJING, hour=h, minute=m)
     et = bj.astimezone(timezone(eastern_offset(bj)))
@@ -131,7 +134,7 @@ def desc_of(p):
 post_dir = ROOT / "posts"
 post_dir.mkdir(exist_ok=True)
 all_posts = []
-for col in ("premarket", "postmarket"):
+for col in ("premarket", "postmarket", "review"):
     for p in posts.get(col, []):
         s = slug(col, p)
         url = f"{SITE}/posts/{s}"
@@ -174,6 +177,7 @@ def column(col, items):
 index_body = f"""<main class="cols">
 {column('premarket', posts.get('premarket', []))}
 {column('postmarket', posts.get('postmarket', []))}
+{column('review', posts.get('review', []))}
 </main>"""
 (ROOT / "index.html").write_text(
     shell(
