@@ -13,6 +13,8 @@
 
 - RSS: https://stocks.bjxihi.com/feed.xml
 - Sitemap: https://stocks.bjxihi.com/sitemap.xml
+- 日历（按周归档）: https://stocks.bjxihi.com/calendar.html
+- 每周一股归档: https://stocks.bjxihi.com/stock.html
 
 ## 说明
 

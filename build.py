@@ -116,6 +116,7 @@ def header(h1=True):
     return f"""<header class="site">
 {brand}
 <p>盘前新闻 · 盘后个股 —— 每天两条，浓缩加一点解读 · <a href="/feed.xml">RSS 订阅</a></p>
+<nav class="mainnav"><a href="/">首页</a><a href="/calendar.html">📅 日历</a><a href="/stock.html">🎯 每周一股</a></nav>
 </header>"""
 
 
@@ -177,7 +178,29 @@ for col in ("premarket", "postmarket", "review", "stock"):
         )
         all_posts.append((col, p, s, url))
 
-# ---- index.html ----
+# ---- week grouping (ISO weeks, e.g. 2026年第42周) ----
+WEEKDAYS = "一二三四五六日"
+
+
+def week_key(date_str):
+    iso = datetime.strptime(date_str, "%Y-%m-%d").date().isocalendar()
+    return (iso[0], iso[1])
+
+
+def week_title(iso_year, iso_week):
+    mon = datetime.fromisocalendar(iso_year, iso_week, 1).date()
+    sun = datetime.fromisocalendar(iso_year, iso_week, 7).date()
+    return (f"{iso_year}年第{iso_week}周"
+            f"（{mon.month}/{mon.day}–{sun.month}/{sun.day}）")
+
+
+def day_title(date_str):
+    d = datetime.strptime(date_str, "%Y-%m-%d").date()
+    return f"{d.month}/{d.day} 周{WEEKDAYS[d.weekday()]}"
+
+
+# weeks: (iso_year, iso_week) -> {"review": [(col,p)], "stock": [...],
+#                                 "days": {date: {"premarket": [...], "postmarket": [...]}}}
 def card(col, p):
     s = slug(col, p)
     lis = "\n".join(f"<li>{html.escape(x)}</li>" for x in p["body"])
@@ -189,20 +212,44 @@ def card(col, p):
 </article>"""
 
 
-def column(col, items):
-    inner = "\n".join(card(col, p) for p in items) or '<p class="empty">敬请期待</p>'
-    return f"""<section class="col {col}">
-<h2>{COL_ICONS[col]} {COL_NAMES[col]}</h2>
-{inner}
-</section>"""
+weeks = {}
+for col in ("premarket", "postmarket", "review", "stock"):
+    for p in posts.get(col, []):
+        w = weeks.setdefault(week_key(p["date"]),
+                             {"review": [], "stock": [], "days": {}})
+        if col in ("review", "stock"):
+            w[col].append((col, p))
+        else:
+            day = w["days"].setdefault(
+                p["date"], {"premarket": [], "postmarket": []})
+            day[col].append((col, p))
+sorted_weeks = sorted(weeks.items(), reverse=True)
 
 
-index_body = f"""<main class="cols">
-{column('premarket', posts.get('premarket', []))}
-{column('postmarket', posts.get('postmarket', []))}
-{column('review', posts.get('review', []))}
-{column('stock', posts.get('stock', []))}
-</main>"""
+def featured_html(items):
+    return "\n".join(
+        f'<div class="featured">{card(col, p)}</div>' for col, p in items)
+
+
+def day_block(date_str, day):
+    cards = []
+    for col in ("premarket", "postmarket"):
+        cards.extend(card(c, p) for c, p in day[col])
+    return (f'<div class="day"><h3>{day_title(date_str)}</h3>'
+            f'<div class="day-cards">{"".join(cards)}</div></div>')
+
+
+def week_section(key, w):
+    feat = featured_html(w["review"] + w["stock"])
+    days = "\n".join(day_block(d, w["days"][d])
+                     for d in sorted(w["days"], reverse=True))
+    return (f'<section class="week"><h2 class="week-title">'
+            f'{html.escape(week_title(*key))}</h2>\n{feat}\n{days}</section>')
+
+
+# ---- index.html (周刊式：最新一周完整呈现，往下是往期各周) ----
+index_body = "<main>\n" + "\n".join(
+    week_section(k, w) for k, w in sorted_weeks) + "\n</main>"
 (ROOT / "index.html").write_text(
     shell(
         "美股早晚盘 · 盘前新闻 盘后个股",
@@ -213,12 +260,58 @@ index_body = f"""<main class="cols">
     encoding="utf-8",
 )
 
+
+# ---- calendar.html (按周索引：每周一块，周复盘/每周一股在上，标题链接) ----
+def cal_links(items):
+    return "\n".join(
+        f'<li>{COL_ICONS[col]} <a href="/posts/{slug(col, p)}">'
+        f'{html.escape(p["title"])}</a>'
+        f'<span class="cdate">{html.escape(p["date"])}</span></li>'
+        for col, p in items)
+
+
+def cal_week(key, w):
+    top = cal_links(w["review"] + w["stock"])
+    rest = []
+    for d in sorted(w["days"], reverse=True):
+        for col in ("premarket", "postmarket"):
+            rest.extend(w["days"][d][col])
+    return (f'<section class="week cal"><h2 class="week-title">'
+            f'{html.escape(week_title(*key))}</h2>'
+            f"<ul>\n{top}\n{cal_links(rest)}\n</ul></section>")
+
+
+cal_body = ("<main>\n<h1 class=\"page-title\">📅 日历</h1>\n"
+            + "\n".join(cal_week(k, w) for k, w in sorted_weeks)
+            + "\n</main>")
+(ROOT / "calendar.html").write_text(
+    shell("日历 · 美股早晚盘", "美股早晚盘内容日历：按周归档，周复盘与每周一股置顶。",
+          SITE + "/calendar.html", cal_body, site_h1=False),
+    encoding="utf-8",
+)
+
+
+# ---- stock.html (每周一股归档) ----
+stock_body = ("<main>\n<h1 class=\"page-title\">🎯 每周一股</h1>\n"
+              + "\n".join(card("stock", p)
+                          for p in posts.get("stock", []))
+              + "\n</main>")
+(ROOT / "stock.html").write_text(
+    shell("每周一股 · 美股早晚盘", "每周一股归档：每周精选一支本周值得跟踪的股票。",
+          SITE + "/stock.html", stock_body, site_h1=False),
+    encoding="utf-8",
+)
+
 # ---- sitemap.xml ----
 urls = [(SITE + "/", max(
     (p["date"] for _, p, _, _ in all_posts), default="2026-09-29"
 ))]
 for _, p, _, url in all_posts:
     urls.append((url, p["date"]))
+for page in ("calendar.html", "stock.html"):
+    urls.append((SITE + "/" + page,
+                 max((p["date"] for _, p, _, _ in all_posts),
+                     default="2026-09-29")))
 sm = ['<?xml version="1.0" encoding="UTF-8"?>',
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 for loc, lastmod in urls:
