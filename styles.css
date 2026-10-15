@@ -50,6 +50,11 @@ header.site p { color: var(--muted); font-size: 14px; margin-top: 6px; letter-sp
 .cal li { padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 14.5px; }
 .cal li a { color: var(--ink); text-decoration: none; }
 .cal li a:hover { color: var(--accent); }
+.more-weeks { margin: 8px 0 40px; font-size: 15px; }
+.more-weeks a { color: var(--accent2); text-decoration: none; letter-spacing: 1px; }
+.more-weeks a:hover { text-decoration: underline; }
+.week-title a { color: inherit; text-decoration: none; }
+.week-title a:hover { color: var(--accent); }
 .cal .cdate { color: var(--muted); font-size: 12px; margin-left: 10px; letter-spacing: 1px; }
 .card {
   background: var(--card);

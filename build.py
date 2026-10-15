@@ -17,8 +17,8 @@ SITE = "https://stocks.bjxihi.com"
 # Google Analytics 4 Measurement ID — 用户在 analytics.google.com 建好媒体资源后替换
 GA_ID = "G-4Y532TX5S0"
 
-COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "周月复盘", "stock": "每周一股"}
-COL_ICONS = {"premarket": "☀", "postmarket": "🌙", "review": "📊", "stock": "🎯"}
+COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "周月复盘", "stock": "每周一股", "preview": "每周前瞻"}
+COL_ICONS = {"premarket": "☀", "postmarket": "🌙", "review": "📊", "stock": "🎯", "preview": "🗓"}
 
 BEIJING = timezone(timedelta(hours=8))
 
@@ -51,7 +51,8 @@ def publish_times(col, p):
         bj = datetime.strptime(explicit, "%Y-%m-%d %H:%M").replace(tzinfo=BEIJING)
     else:
         h, m = {"postmarket": (8, 21), "premarket": (20, 21),
-                "review": (8, 30), "stock": (8, 30)}[col]
+                "review": (8, 30), "stock": (8, 30),
+                "preview": (9, 0)}[col]
         bj = datetime.strptime(p["date"], "%Y-%m-%d").replace(
             tzinfo=BEIJING, hour=h, minute=m)
     et = bj.astimezone(timezone(eastern_offset(bj)))
@@ -116,7 +117,7 @@ def header(h1=True):
     return f"""<header class="site">
 {brand}
 <p>盘前新闻 · 盘后个股 —— 每天两条，浓缩加一点解读 · <a href="/feed.xml">RSS 订阅</a></p>
-<nav class="mainnav"><a href="/">首页</a><a href="/calendar.html">📅 日历</a><a href="/stock.html">🎯 每周一股</a></nav>
+<nav class="mainnav"><a href="/">首页</a><a href="/calendar.html">📅 日历</a><a href="/stock.html">🎯 每周一股</a><a href="/preview.html">🗓 每周前瞻</a></nav>
 </header>"""
 
 
@@ -157,7 +158,7 @@ def desc_of(p):
 post_dir = ROOT / "posts"
 post_dir.mkdir(exist_ok=True)
 all_posts = []
-for col in ("premarket", "postmarket", "review", "stock"):
+for col in ("premarket", "postmarket", "review", "stock", "preview"):
     for p in posts.get(col, []):
         s = slug(col, p)
         url = f"{SITE}/posts/{s}"
@@ -182,11 +183,6 @@ for col in ("premarket", "postmarket", "review", "stock"):
 WEEKDAYS = "一二三四五六日"
 
 
-def week_key(date_str):
-    iso = datetime.strptime(date_str, "%Y-%m-%d").date().isocalendar()
-    return (iso[0], iso[1])
-
-
 def week_title(iso_year, iso_week):
     mon = datetime.fromisocalendar(iso_year, iso_week, 1).date()
     sun = datetime.fromisocalendar(iso_year, iso_week, 7).date()
@@ -199,8 +195,18 @@ def day_title(date_str):
     return f"{d.month}/{d.day} 周{WEEKDAYS[d.weekday()]}"
 
 
+def week_key_for(col, date_str):
+    """ISO week a post belongs to. Sunday columns (每周一股/每周前瞻) are
+    forward-looking, so they belong to the coming week."""
+    d = datetime.strptime(date_str, "%Y-%m-%d").date()
+    if col in ("stock", "preview"):
+        d += timedelta(days=1)  # Sunday -> Monday of the coming week
+    iso = d.isocalendar()
+    return (iso[0], iso[1])
+
+
 # weeks: (iso_year, iso_week) -> {"review": [(col,p)], "stock": [...],
-#                                 "days": {date: {"premarket": [...], "postmarket": [...]}}}
+#          "preview": [...], "days": {date: {"premarket": [...], "postmarket": [...]}}}
 def card(col, p):
     s = slug(col, p)
     lis = "\n".join(f"<li>{html.escape(x)}</li>" for x in p["body"])
@@ -213,11 +219,12 @@ def card(col, p):
 
 
 weeks = {}
-for col in ("premarket", "postmarket", "review", "stock"):
+for col in ("premarket", "postmarket", "review", "stock", "preview"):
     for p in posts.get(col, []):
-        w = weeks.setdefault(week_key(p["date"]),
-                             {"review": [], "stock": [], "days": {}})
-        if col in ("review", "stock"):
+        w = weeks.setdefault(week_key_for(col, p["date"]),
+                             {"review": [], "stock": [], "preview": [],
+                              "days": {}})
+        if col in ("review", "stock", "preview"):
             w[col].append((col, p))
         else:
             day = w["days"].setdefault(
@@ -240,16 +247,22 @@ def day_block(date_str, day):
 
 
 def week_section(key, w):
-    feat = featured_html(w["review"] + w["stock"])
+    feat = featured_html(w["review"] + w["stock"] + w["preview"])
     days = "\n".join(day_block(d, w["days"][d])
                      for d in sorted(w["days"], reverse=True))
     return (f'<section class="week"><h2 class="week-title">'
             f'{html.escape(week_title(*key))}</h2>\n{feat}\n{days}</section>')
 
 
-# ---- index.html (周刊式：最新一周完整呈现，往下是往期各周) ----
-index_body = "<main>\n" + "\n".join(
-    week_section(k, w) for k, w in sorted_weeks) + "\n</main>"
+# ---- index.html (只放最新一周完整内容，往期进日历) ----
+def week_url(key):
+    return f"/week/{key[0]}-{key[1]}.html"
+
+
+latest_key, latest_w = sorted_weeks[0]
+index_body = ("<main>\n" + week_section(latest_key, latest_w)
+              + '\n<p class="more-weeks">'
+                '<a href="/calendar.html">往期周刊 → 日历</a></p>\n</main>')
 (ROOT / "index.html").write_text(
     shell(
         "美股早晚盘 · 盘前新闻 盘后个股",
@@ -259,6 +272,30 @@ index_body = "<main>\n" + "\n".join(
     ),
     encoding="utf-8",
 )
+
+
+# ---- per-week pages (/week/YYYY-WW.html): 每周完整周刊 ----
+week_dir = ROOT / "week"
+week_dir.mkdir(exist_ok=True)
+week_pages = []  # (url, lastmod)
+for key, w in sorted_weeks:
+    rel = f"week/{key[0]}-{key[1]}.html"
+    url = SITE + "/" + rel
+    title = week_title(*key)
+    body = "<main>\n" + week_section(key, w) + "\n</main>"
+    (ROOT / rel).write_text(
+        shell(f"{title} · 美股早晚盘",
+              f"美股早晚盘{title}完整内容：周复盘、每周一股、每周前瞻与每日早晚盘。",
+              url, body, site_h1=False),
+        encoding="utf-8",
+    )
+    lastmod = max((p["date"] for _, p in
+                   w["review"] + w["stock"] + w["preview"]
+                   + [x for d in w["days"].values()
+                      for col in ("premarket", "postmarket")
+                      for x in d[col]]),
+                  default="2026-09-29")
+    week_pages.append((url, lastmod))
 
 
 # ---- calendar.html (按周索引：每周一块，周复盘/每周一股在上，标题链接) ----
@@ -271,14 +308,14 @@ def cal_links(items):
 
 
 def cal_week(key, w):
-    top = cal_links(w["review"] + w["stock"])
+    top = cal_links(w["review"] + w["stock"] + w["preview"])
     rest = []
     for d in sorted(w["days"], reverse=True):
         for col in ("premarket", "postmarket"):
             rest.extend(w["days"][d][col])
     return (f'<section class="week cal"><h2 class="week-title">'
-            f'{html.escape(week_title(*key))}</h2>'
-            f"<ul>\n{top}\n{cal_links(rest)}\n</ul></section>")
+            f'<a href="{week_url(key)}">{html.escape(week_title(*key))}</a>'
+            f"</h2><ul>\n{top}\n{cal_links(rest)}\n</ul></section>")
 
 
 cal_body = ("<main>\n<h1 class=\"page-title\">📅 日历</h1>\n"
@@ -292,15 +329,24 @@ cal_body = ("<main>\n<h1 class=\"page-title\">📅 日历</h1>\n"
 
 
 # ---- stock.html (每周一股归档) ----
-stock_body = ("<main>\n<h1 class=\"page-title\">🎯 每周一股</h1>\n"
-              + "\n".join(card("stock", p)
-                          for p in posts.get("stock", []))
-              + "\n</main>")
-(ROOT / "stock.html").write_text(
-    shell("每周一股 · 美股早晚盘", "每周一股归档：每周精选一支本周值得跟踪的股票。",
-          SITE + "/stock.html", stock_body, site_h1=False),
-    encoding="utf-8",
-)
+def archive_page(col, icon, name, desc, filename):
+    body = ("<main>\n"
+            f"<h1 class=\"page-title\">{icon} {name}</h1>\n"
+            + "\n".join(card(col, p) for p in posts.get(col, []))
+            + "\n</main>")
+    (ROOT / filename).write_text(
+        shell(f"{name} · 美股早晚盘", desc,
+              SITE + "/" + filename, body, site_h1=False),
+        encoding="utf-8",
+    )
+
+
+archive_page("stock", "🎯", "每周一股",
+             "每周一股归档：每周精选一支本周值得跟踪的股票。",
+             "stock.html")
+archive_page("preview", "🗓", "每周前瞻",
+             "每周前瞻归档：下周美股重要数据、重要财报与关键事件。",
+             "preview.html")
 
 # ---- sitemap.xml ----
 urls = [(SITE + "/", max(
@@ -308,10 +354,11 @@ urls = [(SITE + "/", max(
 ))]
 for _, p, _, url in all_posts:
     urls.append((url, p["date"]))
-for page in ("calendar.html", "stock.html"):
+for page in ("calendar.html", "stock.html", "preview.html"):
     urls.append((SITE + "/" + page,
                  max((p["date"] for _, p, _, _ in all_posts),
                      default="2026-09-29")))
+urls.extend(week_pages)
 sm = ['<?xml version="1.0" encoding="UTF-8"?>',
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 for loc, lastmod in urls:
