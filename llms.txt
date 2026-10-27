@@ -9,6 +9,7 @@
 - 周月复盘（周六及每月 1 号发布）：本周/当月美股回顾与下周/下月前瞻。
 - 每周一股（周日发布）：按固定标准精选一支本周值得跟踪的股票，含公司主营业务简介、入选理由、关键价位（触发价与止损价）与风险提示。
 - 每周前瞻（周日发布）：下周美股重要日程——重要经济数据（含美东发布时间、市场预期与前值）、重要公司财报（注明盘前/盘后）、其他关键事件。只覆盖美股相关。
+- 美股百科（不定期发布，常年有效）：美股基础知识——交易时间、指数、财报、ETF 与常用术语，长效内容，永久保留。
 
 ## 订阅与索引
 
@@ -17,6 +18,7 @@
 - 日历（按周归档）: https://stocks.bjxihi.com/calendar.html
 - 每周一股归档: https://stocks.bjxihi.com/stock.html
 - 每周前瞻归档: https://stocks.bjxihi.com/preview.html
+- 美股百科归档: https://stocks.bjxihi.com/encyclopedia.html
 - 每周周刊页（如）: https://stocks.bjxihi.com/week/2026-42.html
 
 ## 说明

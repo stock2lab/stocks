@@ -2,10 +2,18 @@
 """Generate the stocks site: index.html, per-post pages, sitemap.xml, feed.xml.
 
 Source of truth: data/posts.json
-  {"premarket": [...], "postmarket": [...], "review": [...], "stock": [...]}
+  {"premarket": [...], "postmarket": [...], "review": [...], "stock": [...],
+   "preview": [...], "encyclopedia": [...]}
   each entry: {"date": "YYYY-MM-DD", "title": "...", "body": ["...", ...]}
   "review" holds 每周复盘 (Saturdays) and 月度复盘 (1st of month) posts.
   "stock" holds 每周一股 (Sundays) single-stock profiles.
+  "encyclopedia" holds 美股百科 long-form explainers. Unlike the daily
+  columns (posts.json keeps only a recent window: 早晚盘 7 条, 其余 8 条),
+  the encyclopedia array is NEVER trimmed: evergreen articles stay in
+  posts.json, on disk, in the sitemap and in /encyclopedia.html forever.
+  Encyclopedia entries may carry an optional "slug" (e.g.
+  "2026-10-27-encyclopedia-trading-hours") so several articles can share
+  a date; without it the file is YYYY-MM-DD-encyclopedia.html.
 """
 import html
 import json
@@ -17,8 +25,8 @@ SITE = "https://stocks.bjxihi.com"
 # Google Analytics 4 Measurement ID — 用户在 analytics.google.com 建好媒体资源后替换
 GA_ID = "G-4Y532TX5S0"
 
-COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "周月复盘", "stock": "每周一股", "preview": "每周前瞻"}
-COL_ICONS = {"premarket": "☀", "postmarket": "🌙", "review": "📊", "stock": "🎯", "preview": "🗓"}
+COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "周月复盘", "stock": "每周一股", "preview": "每周前瞻", "encyclopedia": "美股百科"}
+COL_ICONS = {"premarket": "☀", "postmarket": "🌙", "review": "📊", "stock": "🎯", "preview": "🗓", "encyclopedia": "📚"}
 
 BEIJING = timezone(timedelta(hours=8))
 
@@ -52,7 +60,7 @@ def publish_times(col, p):
     else:
         h, m = {"postmarket": (8, 21), "premarket": (20, 21),
                 "review": (8, 30), "stock": (8, 30),
-                "preview": (9, 0)}[col]
+                "preview": (9, 0), "encyclopedia": (9, 0)}[col]
         bj = datetime.strptime(p["date"], "%Y-%m-%d").replace(
             tzinfo=BEIJING, hour=h, minute=m)
     et = bj.astimezone(timezone(eastern_offset(bj)))
@@ -96,7 +104,7 @@ def json_ld_article(col, p, url):
     _, _, bj_dt = publish_times(col, p)
     data = {
         "@context": "https://schema.org",
-        "@type": "NewsArticle",
+        "@type": "Article" if col == "encyclopedia" else "NewsArticle",
         "headline": p["title"],
         "description": desc_of(p),
         "datePublished": bj_dt.isoformat(),
@@ -117,7 +125,7 @@ def header(h1=True):
     return f"""<header class="site">
 {brand}
 <p>盘前新闻 · 盘后个股 —— 每天两条，浓缩加一点解读 · <a href="/feed.xml">RSS 订阅</a></p>
-<nav class="mainnav"><a href="/">首页</a><a href="/calendar.html">📅 日历</a><a href="/stock.html">🎯 每周一股</a><a href="/preview.html">🗓 每周前瞻</a></nav>
+<nav class="mainnav"><a href="/">首页</a><a href="/calendar.html">📅 日历</a><a href="/stock.html">🎯 每周一股</a><a href="/preview.html">🗓 每周前瞻</a><a href="/encyclopedia.html">📚 美股百科</a></nav>
 </header>"""
 
 
@@ -146,7 +154,22 @@ def shell(title, desc, url, body_html, extra_head="", site_h1=True):
 
 
 def slug(col, p):
+    if p.get("slug"):
+        return f"{p['slug']}.html"
     return f"{p['date']}-{col}.html"
+
+
+def encyclopedia_body_html(p):
+    """Long-form rendering for 美股百科: '## ...' lines become h3
+    headings, other lines become paragraphs (other columns stay as
+    bullet lists)."""
+    parts = []
+    for x in p["body"]:
+        if x.startswith("## "):
+            parts.append(f"<h3>{html.escape(x[3:])}</h3>")
+        else:
+            parts.append(f"<p>{html.escape(x)}</p>")
+    return "\n".join(parts)
 
 
 def desc_of(p):
@@ -158,18 +181,22 @@ def desc_of(p):
 post_dir = ROOT / "posts"
 post_dir.mkdir(exist_ok=True)
 all_posts = []
-for col in ("premarket", "postmarket", "review", "stock", "preview"):
+for col in ("premarket", "postmarket", "review", "stock", "preview", "encyclopedia"):
     for p in posts.get(col, []):
         s = slug(col, p)
         url = f"{SITE}/posts/{s}"
-        lis = "\n".join(f"<li>{html.escape(x)}</li>" for x in p["body"])
+        if col == "encyclopedia":
+            body_inner = encyclopedia_body_html(p)
+        else:
+            lis = "\n".join(f"<li>{html.escape(x)}</li>" for x in p["body"])
+            body_inner = f"<ul style=\"margin-top:12px\">{lis}</ul>"
         body_html = f"""<main>
 <nav style="margin-bottom:16px;font-size:14px"><a href="/">← 返回首页</a> · {COL_ICONS[col]} {COL_NAMES[col]}</nav>
 <article class="card">
 <div class="date">{html.escape(p['date'])} · {COL_NAMES[col]}</div>
 {pubtime_html(col, p)}
 <h1 class="post-title">{html.escape(p['title'])}</h1>
-<ul style="margin-top:12px">{lis}</ul>
+{body_inner}
 </article>
 </main>"""
         (post_dir / s).write_text(
@@ -348,6 +375,23 @@ archive_page("preview", "🗓", "每周前瞻",
              "每周前瞻归档：下周美股重要数据、重要财报与关键事件。",
              "preview.html")
 
+# ---- encyclopedia.html (美股百科归档：长效内容，永久保留) ----
+enc_items = sorted(posts.get("encyclopedia", []),
+                   key=lambda p: p["date"], reverse=True)
+enc_body = ("<main>\n<h1 class=\"page-title\">📚 美股百科</h1>\n"
+            "<p style=\"margin-bottom:16px\">美股基础知识，常年有效：交易时间、指数、财报、ETF 与常用术语。</p>\n<ul>\n"
+            + "\n".join(
+                f'<li>📚 <a href="/posts/{slug("encyclopedia", p)}">'
+                f'{html.escape(p["title"])}</a>'
+                f'<span class="cdate">{html.escape(p["date"])}</span></li>'
+                for p in enc_items)
+            + "\n</ul>\n</main>")
+(ROOT / "encyclopedia.html").write_text(
+    shell("美股百科 · 美股早晚盘", "美股百科归档：美股交易时间、指数、财报、ETF 与术语，常年有效。",
+          SITE + "/encyclopedia.html", enc_body, site_h1=False),
+    encoding="utf-8",
+)
+
 # ---- sitemap.xml ----
 # 注意：posts.json 每栏目只保留最近窗口（早晚盘各 7 条），老文章会
 # 掉出 posts.json，但它们的页面仍在 posts/ 磁盘上，并被日历/周刊页
@@ -365,7 +409,7 @@ for f in sorted(post_dir.glob("*.html")):
     if url not in seen:
         urls.append((url, f.name[:10]))  # 文件名形如 YYYY-MM-DD-<栏目>.html
         seen.add(url)
-for page in ("calendar.html", "stock.html", "preview.html"):
+for page in ("calendar.html", "stock.html", "preview.html", "encyclopedia.html"):
     urls.append((SITE + "/" + page,
                  max((p["date"] for _, p, _, _ in all_posts),
                      default="2026-09-29")))
