@@ -349,11 +349,22 @@ archive_page("preview", "🗓", "每周前瞻",
              "preview.html")
 
 # ---- sitemap.xml ----
+# 注意：posts.json 每栏目只保留最近窗口（早晚盘各 7 条），老文章会
+# 掉出 posts.json，但它们的页面仍在 posts/ 磁盘上，并被日历/周刊页
+# 链接。sitemap 必须收录磁盘上的全部文章页，否则 Google 只能靠内链
+# 慢慢发现（这正是 25 页"已发现 - 尚未编入索引"的来源之一）。
 urls = [(SITE + "/", max(
     (p["date"] for _, p, _, _ in all_posts), default="2026-09-29"
 ))]
+seen = {SITE + "/"}
 for _, p, _, url in all_posts:
     urls.append((url, p["date"]))
+    seen.add(url)
+for f in sorted(post_dir.glob("*.html")):
+    url = f"{SITE}/posts/{f.name}"
+    if url not in seen:
+        urls.append((url, f.name[:10]))  # 文件名形如 YYYY-MM-DD-<栏目>.html
+        seen.add(url)
 for page in ("calendar.html", "stock.html", "preview.html"):
     urls.append((SITE + "/" + page,
                  max((p["date"] for _, p, _, _ in all_posts),
