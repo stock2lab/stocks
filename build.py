@@ -8,8 +8,8 @@ Source of truth: data/posts.json
   "review" holds 每周复盘 (Saturdays) and 月度复盘 (1st of month) posts.
   "stock" holds 每周一股 (Sundays) single-stock profiles.
   "encyclopedia" holds 美股百科 long-form explainers. "glossary" holds
-  术语词典 entries, "etf" holds ETF 指南, "companies" holds 公司档案
-  reference profiles. These four long-form columns are NEVER trimmed:
+  术语词典 entries, "etf" holds ETF 指南. These three long-form columns
+  are NEVER trimmed:
   unlike the daily columns (posts.json keeps only a recent window:
   早晚盘 7 条, 其余 8 条), evergreen articles stay in posts.json, on
   disk, in the sitemap and in their archive pages forever.
@@ -28,10 +28,10 @@ SITE = "https://stocks.bjxihi.com"
 # Google Analytics 4 Measurement ID — 用户在 analytics.google.com 建好媒体资源后替换
 GA_ID = "G-4Y532TX5S0"
 
-COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "周月复盘", "stock": "每周一股", "preview": "每周前瞻", "encyclopedia": "美股百科", "glossary": "术语词典", "etf": "ETF 指南", "companies": "公司档案"}
-COL_ICONS = {"premarket": "☀", "postmarket": "🌙", "review": "📊", "stock": "🎯", "preview": "🗓", "encyclopedia": "📚", "glossary": "📖", "etf": "🧺", "companies": "🏢"}
+COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "周月复盘", "stock": "每周一股", "preview": "每周前瞻", "encyclopedia": "美股百科", "glossary": "术语词典", "etf": "ETF 指南"}
+COL_ICONS = {"premarket": "☀", "postmarket": "🌙", "review": "📊", "stock": "🎯", "preview": "🗓", "encyclopedia": "📚", "glossary": "📖", "etf": "🧺"}
 # 长效栏目：用章节式正文（## 标题 + 段落），永久保留、不裁剪
-LONGFORM_COLS = ("encyclopedia", "glossary", "etf", "companies")
+LONGFORM_COLS = ("encyclopedia", "glossary", "etf")
 
 BEIJING = timezone(timedelta(hours=8))
 
@@ -66,8 +66,7 @@ def publish_times(col, p):
         h, m = {"postmarket": (8, 21), "premarket": (20, 21),
                 "review": (8, 30), "stock": (8, 30),
                 "preview": (9, 0), "encyclopedia": (9, 0),
-                "glossary": (9, 0), "etf": (9, 0),
-                "companies": (9, 0)}[col]
+                "glossary": (9, 0), "etf": (9, 0)}[col]
         bj = datetime.strptime(p["date"], "%Y-%m-%d").replace(
             tzinfo=BEIJING, hour=h, minute=m)
     et = bj.astimezone(timezone(eastern_offset(bj)))
@@ -132,7 +131,7 @@ def header(h1=True):
     return f"""<header class="site">
 {brand}
 <p>盘前新闻 · 盘后个股 —— 每天两条，浓缩加一点解读 · <a href="/feed.xml">RSS 订阅</a></p>
-<nav class="mainnav"><a href="/">首页</a><a href="/calendar.html">📅 日历</a><a href="/stock.html">🎯 每周一股</a><a href="/preview.html">🗓 每周前瞻</a><a href="/encyclopedia.html">📚 美股百科</a><a href="/glossary.html">📖 术语词典</a><a href="/etf.html">🧺 ETF 指南</a><a href="/companies.html">🏢 公司档案</a></nav>
+<nav class="mainnav"><a href="/">首页</a><a href="/calendar.html">📅 日历</a><a href="/stock.html">🎯 每周一股</a><a href="/preview.html">🗓 每周前瞻</a><a href="/encyclopedia.html">📚 美股百科</a><a href="/glossary.html">📖 术语词典</a><a href="/etf.html">🧺 ETF 指南</a></nav>
 </header>"""
 
 
@@ -336,7 +335,7 @@ for key, w in sorted_weeks:
 def cal_links(items):
     return "\n".join(
         f'<li>{COL_ICONS[col]} <a href="/posts/{slug(col, p)}">'
-        f'{html.escape(p["title"])}</a>'
+        f'{html.escape(p["title"])}</a> '
         f'<span class="cdate">{html.escape(p["date"])}</span></li>'
         for col, p in items)
 
@@ -391,22 +390,10 @@ def longform_archive_page(col, icon, name, desc, filename, intro):
             f"<p style=\"margin-bottom:16px\">{intro}</p>\n<ul>\n"
             + "\n".join(
                 f'<li>{icon} <a href="/posts/{slug(col, p)}">'
-                f'{html.escape(p["title"])}</a>'
+                f'{html.escape(p["title"])}</a> '
                 f'<span class="cdate">{html.escape(p["date"])}</span></li>'
                 for p in items)
-            + "\n</ul>\n")
-    if col == "companies":
-        # 每周一股已覆盖的公司同样进档案库（只挂链接，不重复写档案）
-        stock_items = sorted(posts.get("stock", []),
-                             key=lambda p: p["date"], reverse=True)
-        body += ("<h2 style=\"margin-top:28px\">每周一股已覆盖</h2>\n<ul>\n"
-                 + "\n".join(
-                     f'<li>🎯 <a href="/posts/{slug("stock", p)}">'
-                     f'{html.escape(p["title"])}</a>'
-                     f'<span class="cdate">{html.escape(p["date"])}</span></li>'
-                     for p in stock_items)
-                 + "\n</ul>\n")
-    body += "</main>"
+            + "\n</ul>\n</main>")
     (ROOT / filename).write_text(
         shell(f"{name} · 美股早晚盘", desc,
               SITE + "/" + filename, body, site_h1=False),
@@ -426,10 +413,6 @@ longform_archive_page("etf", "🧺", "ETF 指南",
                       "ETF 指南归档：宽基、行业与红利 ETF 怎么选，常年有效。",
                       "etf.html",
                       "ETF 是'一篮子股票'：这栏讲宽基、行业与红利 ETF 怎么选、怎么比。")
-longform_archive_page("companies", "🏢", "公司档案",
-                      "公司档案归档：已覆盖公司的业务与关键数字，只讲事实，不做推荐。",
-                      "companies.html",
-                      "公司档案只记录业务和公开数字，不设触发价和止损价，也不做推荐。")
 
 # ---- sitemap.xml ----
 # 注意：posts.json 每栏目只保留最近窗口（早晚盘各 7 条），老文章会
@@ -449,7 +432,7 @@ for f in sorted(post_dir.glob("*.html")):
         urls.append((url, f.name[:10]))  # 文件名形如 YYYY-MM-DD-<栏目>.html
         seen.add(url)
 for page in ("calendar.html", "stock.html", "preview.html", "encyclopedia.html",
-             "glossary.html", "etf.html", "companies.html"):
+             "glossary.html", "etf.html"):
     urls.append((SITE + "/" + page,
                  max((p["date"] for _, p, _, _ in all_posts),
                      default="2026-09-29")))

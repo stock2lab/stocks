@@ -12,7 +12,6 @@
 - 美股百科（不定期发布，常年有效）：美股基础知识——交易时间、指数、财报、ETF 与常用术语，长效内容，永久保留。
 - 术语词典（不定期发布，常年有效）：美股财报与研报里最常用的术语，一句话定义加一句怎么用，长效内容，永久保留。
 - ETF 指南（不定期发布，常年有效）：宽基、行业与红利 ETF 怎么选、怎么比，长效内容，永久保留。
-- 公司档案（不定期发布，常年有效）：已覆盖公司的业务与关键数字，只讲事实，不做推荐；每周一股已覆盖的公司同样进档案库，长效内容，永久保留。
 
 ## 订阅与索引
 
@@ -24,7 +23,6 @@
 - 美股百科归档: https://stocks.bjxihi.com/encyclopedia.html
 - 术语词典归档: https://stocks.bjxihi.com/glossary.html
 - ETF 指南归档: https://stocks.bjxihi.com/etf.html
-- 公司档案归档: https://stocks.bjxihi.com/companies.html
 - 每周周刊页（如）: https://stocks.bjxihi.com/week/2026-42.html
 
 ## 说明
