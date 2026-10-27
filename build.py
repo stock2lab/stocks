@@ -7,13 +7,16 @@ Source of truth: data/posts.json
   each entry: {"date": "YYYY-MM-DD", "title": "...", "body": ["...", ...]}
   "review" holds 每周复盘 (Saturdays) and 月度复盘 (1st of month) posts.
   "stock" holds 每周一股 (Sundays) single-stock profiles.
-  "encyclopedia" holds 美股百科 long-form explainers. Unlike the daily
-  columns (posts.json keeps only a recent window: 早晚盘 7 条, 其余 8 条),
-  the encyclopedia array is NEVER trimmed: evergreen articles stay in
-  posts.json, on disk, in the sitemap and in /encyclopedia.html forever.
-  Encyclopedia entries may carry an optional "slug" (e.g.
+  "encyclopedia" holds 美股百科 long-form explainers. "glossary" holds
+  术语词典 entries, "etf" holds ETF 指南, "companies" holds 公司档案
+  reference profiles. These four long-form columns are NEVER trimmed:
+  unlike the daily columns (posts.json keeps only a recent window:
+  早晚盘 7 条, 其余 8 条), evergreen articles stay in posts.json, on
+  disk, in the sitemap and in their archive pages forever.
+  Long-form entries may carry an optional "slug" (e.g.
   "2026-10-27-encyclopedia-trading-hours") so several articles can share
-  a date; without it the file is YYYY-MM-DD-encyclopedia.html.
+  a date; without it the file is YYYY-MM-DD-<col>.html. Their body uses
+  "## ..." lines as section headings and other lines as paragraphs.
 """
 import html
 import json
@@ -25,8 +28,10 @@ SITE = "https://stocks.bjxihi.com"
 # Google Analytics 4 Measurement ID — 用户在 analytics.google.com 建好媒体资源后替换
 GA_ID = "G-4Y532TX5S0"
 
-COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "周月复盘", "stock": "每周一股", "preview": "每周前瞻", "encyclopedia": "美股百科"}
-COL_ICONS = {"premarket": "☀", "postmarket": "🌙", "review": "📊", "stock": "🎯", "preview": "🗓", "encyclopedia": "📚"}
+COL_NAMES = {"premarket": "早盘新闻", "postmarket": "晚盘个股", "review": "周月复盘", "stock": "每周一股", "preview": "每周前瞻", "encyclopedia": "美股百科", "glossary": "术语词典", "etf": "ETF 指南", "companies": "公司档案"}
+COL_ICONS = {"premarket": "☀", "postmarket": "🌙", "review": "📊", "stock": "🎯", "preview": "🗓", "encyclopedia": "📚", "glossary": "📖", "etf": "🧺", "companies": "🏢"}
+# 长效栏目：用章节式正文（## 标题 + 段落），永久保留、不裁剪
+LONGFORM_COLS = ("encyclopedia", "glossary", "etf", "companies")
 
 BEIJING = timezone(timedelta(hours=8))
 
@@ -60,7 +65,9 @@ def publish_times(col, p):
     else:
         h, m = {"postmarket": (8, 21), "premarket": (20, 21),
                 "review": (8, 30), "stock": (8, 30),
-                "preview": (9, 0), "encyclopedia": (9, 0)}[col]
+                "preview": (9, 0), "encyclopedia": (9, 0),
+                "glossary": (9, 0), "etf": (9, 0),
+                "companies": (9, 0)}[col]
         bj = datetime.strptime(p["date"], "%Y-%m-%d").replace(
             tzinfo=BEIJING, hour=h, minute=m)
     et = bj.astimezone(timezone(eastern_offset(bj)))
@@ -104,7 +111,7 @@ def json_ld_article(col, p, url):
     _, _, bj_dt = publish_times(col, p)
     data = {
         "@context": "https://schema.org",
-        "@type": "Article" if col == "encyclopedia" else "NewsArticle",
+        "@type": "Article" if col in LONGFORM_COLS else "NewsArticle",
         "headline": p["title"],
         "description": desc_of(p),
         "datePublished": bj_dt.isoformat(),
@@ -125,7 +132,7 @@ def header(h1=True):
     return f"""<header class="site">
 {brand}
 <p>盘前新闻 · 盘后个股 —— 每天两条，浓缩加一点解读 · <a href="/feed.xml">RSS 订阅</a></p>
-<nav class="mainnav"><a href="/">首页</a><a href="/calendar.html">📅 日历</a><a href="/stock.html">🎯 每周一股</a><a href="/preview.html">🗓 每周前瞻</a><a href="/encyclopedia.html">📚 美股百科</a></nav>
+<nav class="mainnav"><a href="/">首页</a><a href="/calendar.html">📅 日历</a><a href="/stock.html">🎯 每周一股</a><a href="/preview.html">🗓 每周前瞻</a><a href="/encyclopedia.html">📚 美股百科</a><a href="/glossary.html">📖 术语词典</a><a href="/etf.html">🧺 ETF 指南</a><a href="/companies.html">🏢 公司档案</a></nav>
 </header>"""
 
 
@@ -159,10 +166,10 @@ def slug(col, p):
     return f"{p['date']}-{col}.html"
 
 
-def encyclopedia_body_html(p):
-    """Long-form rendering for 美股百科: '## ...' lines become h3
-    headings, other lines become paragraphs (other columns stay as
-    bullet lists)."""
+def longform_body_html(p):
+    """Long-form rendering for 美股百科/术语词典/ETF 指南/公司档案:
+    '## ...' lines become h3 headings, other lines become paragraphs
+    (other columns stay as bullet lists)."""
     parts = []
     for x in p["body"]:
         if x.startswith("## "):
@@ -181,12 +188,12 @@ def desc_of(p):
 post_dir = ROOT / "posts"
 post_dir.mkdir(exist_ok=True)
 all_posts = []
-for col in ("premarket", "postmarket", "review", "stock", "preview", "encyclopedia"):
+for col in ("premarket", "postmarket", "review", "stock", "preview") + LONGFORM_COLS:
     for p in posts.get(col, []):
         s = slug(col, p)
         url = f"{SITE}/posts/{s}"
-        if col == "encyclopedia":
-            body_inner = encyclopedia_body_html(p)
+        if col in LONGFORM_COLS:
+            body_inner = longform_body_html(p)
         else:
             lis = "\n".join(f"<li>{html.escape(x)}</li>" for x in p["body"])
             body_inner = f"<ul style=\"margin-top:12px\">{lis}</ul>"
@@ -375,22 +382,54 @@ archive_page("preview", "🗓", "每周前瞻",
              "每周前瞻归档：下周美股重要数据、重要财报与关键事件。",
              "preview.html")
 
-# ---- encyclopedia.html (美股百科归档：长效内容，永久保留) ----
-enc_items = sorted(posts.get("encyclopedia", []),
+# ---- long-form archive pages (长效栏目归档：永久保留) ----
+def longform_archive_page(col, icon, name, desc, filename, intro):
+    items = sorted(posts.get(col, []),
                    key=lambda p: p["date"], reverse=True)
-enc_body = ("<main>\n<h1 class=\"page-title\">📚 美股百科</h1>\n"
-            "<p style=\"margin-bottom:16px\">美股基础知识，常年有效：交易时间、指数、财报、ETF 与常用术语。</p>\n<ul>\n"
+    body = ("<main>\n"
+            f"<h1 class=\"page-title\">{icon} {name}</h1>\n"
+            f"<p style=\"margin-bottom:16px\">{intro}</p>\n<ul>\n"
             + "\n".join(
-                f'<li>📚 <a href="/posts/{slug("encyclopedia", p)}">'
+                f'<li>{icon} <a href="/posts/{slug(col, p)}">'
                 f'{html.escape(p["title"])}</a>'
                 f'<span class="cdate">{html.escape(p["date"])}</span></li>'
-                for p in enc_items)
-            + "\n</ul>\n</main>")
-(ROOT / "encyclopedia.html").write_text(
-    shell("美股百科 · 美股早晚盘", "美股百科归档：美股交易时间、指数、财报、ETF 与术语，常年有效。",
-          SITE + "/encyclopedia.html", enc_body, site_h1=False),
-    encoding="utf-8",
-)
+                for p in items)
+            + "\n</ul>\n")
+    if col == "companies":
+        # 每周一股已覆盖的公司同样进档案库（只挂链接，不重复写档案）
+        stock_items = sorted(posts.get("stock", []),
+                             key=lambda p: p["date"], reverse=True)
+        body += ("<h2 style=\"margin-top:28px\">每周一股已覆盖</h2>\n<ul>\n"
+                 + "\n".join(
+                     f'<li>🎯 <a href="/posts/{slug("stock", p)}">'
+                     f'{html.escape(p["title"])}</a>'
+                     f'<span class="cdate">{html.escape(p["date"])}</span></li>'
+                     for p in stock_items)
+                 + "\n</ul>\n")
+    body += "</main>"
+    (ROOT / filename).write_text(
+        shell(f"{name} · 美股早晚盘", desc,
+              SITE + "/" + filename, body, site_h1=False),
+        encoding="utf-8",
+    )
+
+
+longform_archive_page("encyclopedia", "📚", "美股百科",
+                      "美股百科归档：美股交易时间、指数、财报、ETF 与术语，常年有效。",
+                      "encyclopedia.html",
+                      "美股基础知识，常年有效：交易时间、指数、财报、ETF 与常用术语。")
+longform_archive_page("glossary", "📖", "术语词典",
+                      "术语词典归档：美股财报与研报里最常用的术语，一句话讲清。",
+                      "glossary.html",
+                      "看财报、看研报总遇到一堆缩写：每个术语一句话定义，加一句怎么用。")
+longform_archive_page("etf", "🧺", "ETF 指南",
+                      "ETF 指南归档：宽基、行业与红利 ETF 怎么选，常年有效。",
+                      "etf.html",
+                      "ETF 是'一篮子股票'：这栏讲宽基、行业与红利 ETF 怎么选、怎么比。")
+longform_archive_page("companies", "🏢", "公司档案",
+                      "公司档案归档：已覆盖公司的业务与关键数字，只讲事实，不做推荐。",
+                      "companies.html",
+                      "公司档案只记录业务和公开数字，不设触发价和止损价，也不做推荐。")
 
 # ---- sitemap.xml ----
 # 注意：posts.json 每栏目只保留最近窗口（早晚盘各 7 条），老文章会
@@ -409,7 +448,8 @@ for f in sorted(post_dir.glob("*.html")):
     if url not in seen:
         urls.append((url, f.name[:10]))  # 文件名形如 YYYY-MM-DD-<栏目>.html
         seen.add(url)
-for page in ("calendar.html", "stock.html", "preview.html", "encyclopedia.html"):
+for page in ("calendar.html", "stock.html", "preview.html", "encyclopedia.html",
+             "glossary.html", "etf.html", "companies.html"):
     urls.append((SITE + "/" + page,
                  max((p["date"] for _, p, _, _ in all_posts),
                      default="2026-09-29")))
